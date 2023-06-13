@@ -69,7 +69,7 @@ impl<K, V: serde::Serialize> serde::Serialize for PerfectMap<K,V> {
 
         let mut hasher_bytes = Vec::with_capacity(self.function.write_bytes());
         self.function.write(&mut hasher_bytes).map_err(|_| S::Error::custom("couldn't write hash function"))?; 
-        state.serialize_field("function", &serde_bytes::ByteBuf::from(hasher_bytes))?;
+        state.serialize_field("function", &hasher_bytes)?;
         state.end()
     }
 }
@@ -80,30 +80,6 @@ impl<'de, K, V: serde::Deserialize<'de>> serde::Deserialize<'de> for PerfectMap<
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de> {
-        use std::borrow::Cow;
-
-        #[repr(transparent)]
-        struct CowBytes<'de>(Cow<'de, [u8]>);
-
-        impl<'de> serde::Deserialize<'de> for CowBytes<'de> {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: serde::Deserializer<'de> {
-                if deserializer.is_human_readable() {
-                    Vec::<u8>::deserialize(deserializer).map(|v| CowBytes(Cow::Owned(v)))
-                } else {
-                    <&[u8]>::deserialize(deserializer).map(|v| CowBytes(Cow::Borrowed(v)))
-                }
-            }
-        }
-
-        impl<'de> serde::Serialize for CowBytes<'de> {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: serde::Serializer {
-                self.0.serialize(serializer)
-            }
-        }
         
         #[derive(serde::Deserialize)]
         #[serde(field_identifier, rename_all = "lowercase")]
@@ -126,9 +102,9 @@ impl<'de, K, V: serde::Deserialize<'de>> serde::Deserialize<'de> for PerfectMap<
                 where
                     A: serde::de::SeqAccess<'de>, {
                 let values: Vec<V> = seq.next_element()?.ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
-                let function_bytes: &[u8] = seq.next_element()?.ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+                let function_bytes: Vec<u8> = seq.next_element()?.ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
                 
-                let function = GOFunction::read(&mut function_bytes.as_ref()).map_err(|_| serde::de::Error::custom("invalid bytes: expected bytes representing a ph::GOFunction"))?;
+                let function = GOFunction::read(&mut function_bytes.as_slice()).map_err(|_| serde::de::Error::custom("invalid bytes: expected bytes representing a ph::GOFunction"))?;
 
                 Ok(PerfectMap { function, values, spooky: PhantomData })
             }
@@ -137,7 +113,7 @@ impl<'de, K, V: serde::Deserialize<'de>> serde::Deserialize<'de> for PerfectMap<
                 where
                     A: serde::de::MapAccess<'de>, {
                 let mut values: Option<Vec<V>> = None;
-                let mut function_bytes: Option<Cow<'de, [u8]>> = None;
+                let mut function_bytes: Option<Vec<u8>> = None;
 
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -147,16 +123,16 @@ impl<'de, K, V: serde::Deserialize<'de>> serde::Deserialize<'de> for PerfectMap<
                             function_bytes = Some(map.next_value()?);
                         },
                         Field::Values => {
-                            if values.is_some() { return Err(serde::de::Error::duplicate_field("function")) };
+                            if values.is_some() { return Err(serde::de::Error::duplicate_field("values")) };
                             values = Some(map.next_value()?);
                         }
                     }
                 }
                 
-                let function_bytes = function_bytes.ok_or_else(|| serde::de::Error::missing_field("function"))?;
+                let function_bytes: Vec<u8> = function_bytes.ok_or_else(|| serde::de::Error::missing_field("function"))?;
                 let values = values.ok_or_else(|| serde::de::Error::missing_field("values"))?;
 
-                let function = GOFunction::read(&mut function_bytes.as_ref()).map_err(|_| serde::de::Error::custom("invalid bytes: expected bytes representing a ph::GOFunction"))?;
+                let function = GOFunction::read(&mut function_bytes.as_slice()).map_err(|_| serde::de::Error::custom("invalid bytes: expected bytes representing a ph::GOFunction"))?;
 
 
                 Ok(PerfectMap { function, values, spooky: PhantomData })
