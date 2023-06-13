@@ -55,6 +55,10 @@ impl<K: Hash + Sync, V> PerfectMap<K, V> {
             .get(key)
             .and_then(|v| self.values.get(v as usize))
     }
+
+    pub fn values(&self) -> impl Iterator<Item = &V> {
+        self.values.iter()
+    }
 }
 
 #[cfg(feature = "serde")]
