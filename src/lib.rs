@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, marker::PhantomData, borrow::Borrow};
+use std::{collections::HashMap, hash::Hash, marker::PhantomData, borrow::Borrow, ops::Index};
 
 use ph::fmph::{GOBuildConf, GOConf, GOFunction};
 
@@ -60,6 +60,25 @@ impl<K: Hash + Sync, V> PerfectMap<K, V> {
         self.values.iter()
     }
 }
+
+impl<K, Q: ?Sized, V> Index<&Q> for PerfectMap<K, V>
+where
+    K: Hash + Borrow<Q> + Sync,
+    Q: Hash
+{
+    type Output = V;
+
+    /// Returns a reference to the value corresponding to the supplied key.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the key is not present in the `PerfectMap`.
+    #[inline]
+    fn index(&self, key: &Q) -> &V {
+        self.get(key).expect("no entry found for key")
+    }
+}
+
 
 #[cfg(feature = "serde")]
 impl<K, V: serde::Serialize> serde::Serialize for PerfectMap<K,V> {
