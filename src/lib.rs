@@ -3,9 +3,9 @@ use std::{borrow::Borrow, collections::HashMap, hash::Hash, marker::PhantomData,
 use ph::fmph::{GOBuildConf, GOConf, GOFunction};
 
 pub struct PerfectMap<K, V> {
-    function: ph::fmph::GOFunction,
-    values: Vec<V>,
-    keys: Vec<K>,
+    pub function: ph::fmph::GOFunction,
+    pub values: Vec<V>,
+    pub keys: Vec<K>,
 }
 
 impl<KEY: Hash + Sync, VALUE: Hash + Sync> PerfectMap<KEY, VALUE> {
@@ -66,14 +66,22 @@ impl<K: Hash + Sync, V> PerfectMap<K, V> {
 
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
-        K: Borrow<Q>,
+        K: Borrow<Q> + std::cmp::PartialEq,
         Q: Hash + std::cmp::PartialEq + ?Sized,
     {
-        self.function
-            .get(key)
-            .map(|idx| idx as usize)
-            .filter(|idx| self.keys[*idx].borrow() == key)
-            .and_then(|v| self.values.get(v as usize))
+
+        match self.function.get(key) {
+            Some(idx) => {
+                let idx = idx as usize;
+
+                if self.keys[idx].borrow() != key {
+                    return None;
+                }
+        
+                self.values.get(idx as usize)
+            },
+            None => None,
+        }
     }
 
     pub fn values(&self) -> impl Iterator<Item = &V> {
@@ -91,7 +99,7 @@ impl<K: Hash + Sync, V> PerfectMap<K, V> {
 
 impl<K, Q: ?Sized, V> Index<&Q> for PerfectMap<K, V>
 where
-    K: Hash + Borrow<Q> + Sync,
+    K: Hash + Borrow<Q> + Sync + std::cmp::PartialEq,
     Q: Hash + PartialEq,
 {
     type Output = V;
