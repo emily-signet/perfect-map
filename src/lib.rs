@@ -95,6 +95,10 @@ impl<K: Hash + Sync, V> PerfectMap<K, V> {
     pub fn keys_values(&self) -> impl Iterator<Item = (&K, &V)> {
         self.keys.iter().zip(self.values.iter())
     }
+
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
 }
 
 impl<K, Q: ?Sized, V> Index<&Q> for PerfectMap<K, V>
